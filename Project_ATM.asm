@@ -373,7 +373,7 @@ DepositLabel:
 
 WithdrawLabel:
     call withdrawMoney
-    cmp currTransLimit,0 ; ; checks if trans limit reached after this process
+    cmp currTransLimit,0 ; checks if trans limit reached after this process
     je TransLimitReached
     jmp DoWhileLoop
 
