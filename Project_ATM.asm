@@ -14,7 +14,7 @@ Account STRUCT
     pin      DWORD ?
     balance  DWORD ?
     cardType DWORD ?     ; 0 = bronze, 1 = silver, 2 = gold, 3 = Platinum
-    customerType DWORD ? ;0 = Standard, 1 = VIP, 2 = Elite
+    customerType DWORD ? ; 0 = Standard, 1 = VIP, 2 = Elite
 Account ENDS
 
 accounts Account 4 DUP(<>)
@@ -283,7 +283,7 @@ main PROC
     mov DWORD PTR [esi+0], 111222333 ; acc num
     mov DWORD PTR [esi+4], 4321      ; pin
     mov DWORD PTR [esi+12], 50000    ; balance = 50,000
-    mov DWORD PTR [esi+16], 1        ; card type, silver/gold=2
+    mov DWORD PTR [esi+16], 2        ; card type, gold=2
     mov DWORD PTR [esi+20], 1        ; customer type, VIP
 
     add esi, SIZEOF Account
