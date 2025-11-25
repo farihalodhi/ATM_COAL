@@ -8,6 +8,8 @@ MAX_SINGLE_WITHDRAWAL EQU 500
 TECH_ACC_NUM EQU 9999
 TECH_PIN     EQU 4321
 
+Acc_status dword ?
+
 
 Account STRUCT
 	accountNumber DWORD ?
@@ -77,7 +79,7 @@ accountLockedMsg BYTE 13,10,13,10,
     "    ERROR: This account is locked!",13,10,
     "    Please contact the bank.",13,10,0
 
-enterPinMsg BYTE 13,10,"Enter Pin: ",0
+enterPinMsg BYTE 13,10,"    Enter Pin: ",0
 wrongPinMsg BYTE 13,10,"    ERROR: Incorrect PIN.",13,10,0
 wrongTechPinMsg BYTE 13,10,"    ERROR: Invalid Technician PIN!",13,10,0  
 attemptsLeftMsg BYTE "    Attempts left: ",0
@@ -425,7 +427,9 @@ AccountLocked:
     call SetTextColor
     mov edx, OFFSET accountLockedMsg
     call WriteString
-    mov eax, 0
+    mov eax, -1
+    ;mov eax, 0
+    jmp EndProc
    
 TechnicianLogin:
     mov currentAccIdx, -1      ; not a normal user
@@ -516,7 +520,7 @@ DigitsDone:
     mov edx, OFFSET attemptsLeftMsg
     call WriteString
     mov eax, ecx
-    call WriteInt
+    call WriteDec
     call Crlf
 
     mov eax, 500
@@ -1563,6 +1567,8 @@ ReadPINMasked ENDP
 
 TechnicianMenu PROC
 TechMenuStart:
+    mov eax, 14
+    call SetTextColor
     call Clrscr
     mov edx, OFFSET bankNameBanner
     call WriteString
@@ -1582,6 +1588,15 @@ TechMenuStart:
     je ViewTotalCash
     cmp eax, 4
     je ExitTechMode
+
+    ; Invalid choice handler
+    mov eax, 12
+    call SetTextColor
+    mov edx, OFFSET invalidChoice
+    call WriteString
+    mov eax, 1000
+    call Delay
+    jmp TechMenuStart
 
 
 ViewCashStatus:
@@ -1732,6 +1747,11 @@ ViewTotalCash PROC
 ViewTotalCash ENDP
 
 ExxitProgram PROC
+    call Clrscr
+    mov eax,11
+    call SetTextColor
+    mov edx, OFFSET thankYouMsg
+    call WriteString
     exit
 ExxitProgram ENDP
 
@@ -1951,6 +1971,7 @@ InitializeDefaultAccounts PROC
     mov DWORD PTR [esi+48], 0
     mov BYTE PTR [esi+52], 0
     add esi,SIZEOF Account
+    ;ACCOUNT 4
     mov DWORD PTR [esi+0],1004
     mov DWORD PTR [esi+4],4040
     mov DWORD PTR [esi+8],45000
@@ -1978,6 +1999,11 @@ StartATM:
 
     cmp eax, 2
     je TechnicianMode
+
+    ; CHANGES
+    cmp eax, -1
+    je ExitProgram
+    ;je StartATM
 
     call EnterPinProc
     cmp eax, 1
@@ -2070,6 +2096,8 @@ ExitOption:
 ExitProgram:
     call SaveAccountsToFile
     call SaveATMCashToFile
+    mov eax, 2000
+    call Delay
     call Clrscr
     mov eax,11
     call SetTextColor
