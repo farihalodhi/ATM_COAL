@@ -1995,15 +1995,15 @@ main PROC
 StartATM:
     call InsertCard
     cmp eax, 0
-    je ExitProgram
+    je StartATM
+    ;je ExitProgram
 
     cmp eax, 2
     je TechnicianMode
 
-    ; CHANGES
+    ; Account Locked
     cmp eax, -1
     je ExitProgram
-    ;je StartATM
 
     call EnterPinProc
     cmp eax, 1
