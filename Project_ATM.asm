@@ -5,6 +5,9 @@ INCLUDE Irvine32.inc
 MAX_ACCOUNTS = 4
 MAX_DAILY_WITHDRAWAL = 1000
 MAX_SINGLE_WITHDRAWAL = 500
+TECH_ACC_NUM = 9999
+TECH_PIN     = 4321
+
 
 Account STRUCT
 	accountNumber DWORD ?
@@ -16,6 +19,8 @@ Account STRUCT
 	padding BYTE 2 DUP(?) ; Alignment padding
 	dailyWithdrawn DWORD ?
 	accountStatus BYTE ? ;0=active/1=locked
+    transactionCount BYTE ?                    
+	
 Account ENDS
 
 accounts Account MAX_ACCOUNTS DUP(<>)
@@ -26,6 +31,13 @@ userChoice DWORD ?
 withdrawAmount DWORD ?
 depositAmount DWORD ?
 transactionID DWORD 1000
+
+atm100 DWORD 50      ; number of $100 notes
+atm50  DWORD 50
+atm20  DWORD 50
+atm10  DWORD 50
+
+atmTotal DWORD ?
 
 welcomeMsg BYTE 13,10,
 "           ========================================",13,10,
@@ -269,6 +281,32 @@ pinChangeInstructions BYTE 13,10,
     "    PIN Requirements:",13,10,
     "    - Must be exactly 4 digits",13,10,
     "    - Cannot be same as current PIN",13,10,13,10,0
+techMenuText BYTE 13,10,
+    "     *** TECHNICIAN MENU ***",13,10,
+    "     1. View ATM Cash Status",13,10,
+    "     2. Refill ATM Cash",13,10,
+    "     3. View Total Cash",13,10,
+    "     4. Exit",13,10,0
+
+
+cashStatusHeader BYTE 13,10,"*** ATM CASH STATUS ***",13,10,0
+msg100 BYTE " $100 notes: ",0
+msg50  BYTE " $50 notes: ",0
+msg20  BYTE " $20 notes: ",0
+msg10  BYTE " $10 notes: ",0
+totalCashMsg BYTE 13,10," Total Cash Stored: $",0
+
+refillHeader BYTE 13,10,"*** ATM CASH REFILL ***",13,10,0
+refill100 BYTE "Enter count for $100 notes: ",0
+refill50  BYTE "Enter count for $50 notes: ",0
+refill20  BYTE "Enter count for $20 notes: ",0
+refill10  BYTE "Enter count for $10 notes: ",0
+refillDoneMsg BYTE "ATM Cash Refilled Successfully!",13,10,0
+
+totalCashHeader BYTE 13,10,"====== ATM TOTAL CASH ======",13,10,0
+totalCashDisplay BYTE "Total Cash Stored: $",0
+
+
 .code
 ;---------------------------PROCEDURES---------------------------------
 ;------welcome display---------
@@ -332,7 +370,9 @@ DotLoop:
     mov esi, OFFSET accounts
     mov eax, userAccNum
     mov ebx, 0
-    
+
+    cmp userAccNum, TECH_ACC_NUM
+    je TechnicianLogin
 SearchLoop:
     cmp eax, DWORD PTR [esi+0]
     je AccountFound
@@ -369,7 +409,12 @@ AccountLocked:
     mov edx, OFFSET accountLockedMsg
     call WriteString
     mov eax, 0
-    
+   
+TechnicianLogin:
+    mov currentAccIdx, -1      ; not a normal user
+    mov eax, 2                 ; return 2 meaning technician
+    jmp EndProc
+
 EndProc:
     pop esi
     pop ebx
@@ -482,6 +527,8 @@ EnterPinEnd:
     pop ebp
     ret
 EnterPinProc ENDP
+
+
 
 ;------------Display main menu------------------
 DisplayMenu PROC
@@ -786,6 +833,11 @@ PerformWithdrawal:
     sub DWORD PTR [esi+8], eax
     
     add DWORD PTR [esi+48], eax
+    push eax
+    mov al, 0                        ; 0 = Withdrawal
+    mov ebx, withdrawAmount
+   
+    pop eax
     
     mov eax, 15
     call SetTextColor
@@ -806,7 +858,32 @@ DotLoop:
     loop DotLoop
     
     call Crlf
-    
+        ; Deduct bills from ATM storage
+    mov eax, withdrawAmount
+
+    mov ebx, 100
+    xor edx, edx
+    div ebx
+    sub atm100, eax
+    mov eax, edx
+
+    mov ebx, 50
+    xor edx, edx
+    div ebx
+    sub atm50, eax
+    mov eax, edx
+
+    mov ebx, 20
+    xor edx, edx
+    div ebx
+    sub atm20, eax
+    mov eax, edx
+
+    mov ebx, 10
+    xor edx, edx
+    div ebx
+    sub atm10, eax
+
     call ShowDenominations
     
     mov eax, 10
@@ -1108,6 +1185,11 @@ DepositDotLoop:
     
     mov eax, depositAmount
     add DWORD PTR [esi+8], eax
+
+    push eax
+    mov al, 1                        ; 1 = Deposit
+    mov ebx, depositAmount
+    pop eax
     
     mov eax, 10
     call SetTextColor
@@ -1293,6 +1375,7 @@ DepCardDone:
     ret
 ShowDepositReceiptDetails ENDP
 
+;---------------pin change----------
 
 pinChange PROC
     push ebx
@@ -1447,6 +1530,182 @@ ExitReadPIN:
     pop ebx
     ret
 ReadPINMasked ENDP
+
+TechnicianMenu PROC
+TechMenuStart:
+    call Clrscr
+    mov edx, OFFSET bankNameBanner
+    call WriteString
+
+    mov edx, OFFSET techMenuText
+    call WriteString
+
+    mov edx, OFFSET menuPrompt
+    call WriteString
+    call ReadInt
+
+    cmp eax, 1
+    je ViewCashStatus
+    cmp eax, 2
+    je RefillATM
+    cmp eax, 3
+    je ViewTotalCash
+    cmp eax, 4
+    je ExitTechMode
+
+
+ViewCashStatus:
+    call ShowCashStatus
+    jmp TechMenuStart
+
+RefillATM:
+    call RefillCash
+    jmp TechMenuStart
+
+ExitTechMode:
+    call ExxitProgram
+
+TechnicianMenu ENDP
+
+
+ShowCashStatus PROC
+    call Clrscr
+    mov edx, OFFSET bankNameBanner
+    call WriteString
+
+    mov eax, 14
+    call SetTextColor
+    mov edx, OFFSET cashStatusHeader
+    call WriteString
+
+    mov eax, atm100
+    mov edx, OFFSET msg100
+    call WriteString
+    call WriteDec
+    call Crlf
+
+    mov eax, atm50
+    mov edx, OFFSET msg50
+    call WriteString
+    call WriteDec
+    call Crlf
+
+    mov eax, atm20
+    mov edx, OFFSET msg20
+    call WriteString
+    call WriteDec
+    call Crlf
+
+    mov eax, atm10
+    mov edx, OFFSET msg10
+    call WriteString
+    call WriteDec
+    call Crlf
+
+    mov atmTotal, 0
+    mov eax, atm100
+    imul eax, 100
+    add atmTotal, eax
+
+    mov eax, atm50
+    imul eax, 50
+    add atmTotal, eax
+
+    mov eax, atm20
+    imul eax, 20
+    add atmTotal, eax
+
+    mov eax, atm10
+    imul eax, 10
+    add atmTotal, eax
+
+    mov edx, OFFSET totalCashMsg
+    call WriteString
+    mov eax, atmTotal
+    call WriteDec
+    call Crlf
+
+    call WaitMsg
+    ret
+ShowCashStatus ENDP
+
+
+RefillCash PROC
+    call Clrscr
+    mov edx, OFFSET refillHeader
+    call WriteString
+
+    mov edx, OFFSET refill100
+    call WriteString
+    call ReadInt
+    mov atm100, eax
+
+    mov edx, OFFSET refill50
+    call WriteString
+    call ReadInt
+    mov atm50, eax
+
+    mov edx, OFFSET refill20
+    call WriteString
+    call ReadInt
+    mov atm20, eax
+
+    mov edx, OFFSET refill10
+    call WriteString
+    call ReadInt
+    mov atm10, eax
+
+    mov edx, OFFSET refillDoneMsg
+    call WriteString
+
+    mov eax, 1500
+    call Delay
+    ret
+RefillCash ENDP
+
+ViewTotalCash PROC
+    call Clrscr
+    mov edx, OFFSET bankNameBanner
+    call WriteString
+
+    mov eax, 14
+    call SetTextColor
+    mov edx, OFFSET totalCashHeader
+    call WriteString
+
+    ; total = atm100*100 + atm50*50 + atm20*20 + atm10*10
+
+    mov eax, atm100
+    imul eax, 100
+    mov atmTotal, eax
+
+    mov eax, atm50
+    imul eax, 50
+    add atmTotal, eax
+
+    mov eax, atm20
+    imul eax, 20
+    add atmTotal, eax
+
+    mov eax, atm10
+    imul eax, 10
+    add atmTotal, eax
+
+    mov edx, OFFSET totalCashDisplay
+    call WriteString
+    mov eax, atmTotal
+    call WriteDec
+    call Crlf
+
+    call WaitMsg
+    ret
+ViewTotalCash ENDP
+
+ExxitProgram PROC
+    exit
+ExxitProgram ENDP
+
+
 ;----------------------------MAIN--------------------------------------
 main PROC
     mov esi, OFFSET accounts
@@ -1460,6 +1719,7 @@ main PROC
     mov DWORD PTR [esi+48], 0        ; dailyWithdrawn
     mov BYTE PTR [esi+52], 0         ; accountStatus
     
+    
     ;2nd account
     add esi, SIZEOF Account
     mov DWORD PTR [esi+0], 1002
@@ -1469,7 +1729,8 @@ main PROC
     mov BYTE PTR [esi+45], 1
     mov DWORD PTR [esi+48], 0
     mov BYTE PTR [esi+52], 0
-    
+
+
     ;3rd account
     add esi, SIZEOF Account
     mov DWORD PTR [esi+0], 1003
@@ -1479,6 +1740,7 @@ main PROC
     mov BYTE PTR [esi+45], 2
     mov DWORD PTR [esi+48], 0
     mov BYTE PTR [esi+52], 0
+
     
     ;4th account
     add esi, SIZEOF Account
@@ -1490,15 +1752,37 @@ main PROC
     mov DWORD PTR [esi+48], 0
     mov BYTE PTR [esi+52], 0
 
+
     call welcomeDisplay
 
     call InsertCard
     cmp eax, 1
-    jne ExitProgram
-    
+    je ProceedUserLogin
+
+    cmp eax, 2
+    je TechnicianPin
+
+    jmp ExitProgram
+
+    ProceedUserLogin:
+        call EnterPinProc
+        cmp eax, 1
+        jne ExitProgram
+        jmp MenuLoop
+
     call EnterPinProc
     cmp eax, 1
     jne ExitProgram
+
+    TechnicianPin:
+    mov edx, OFFSET enterPinMsg
+    call WriteString
+    call ReadInt
+
+    cmp eax, TECH_PIN
+    jne ExitProgram
+
+    jmp TechnicianMenu
 
 MenuLoop: 
     call displayMenu
@@ -1558,8 +1842,7 @@ changePin:
     jmp ExitOption
 
 miniStatement:
-    mov edx, OFFSET processingMsg
-    call WriteString
+    
     call WaitMsg
     call AnotherTransaction
     cmp eax, 1
@@ -1567,7 +1850,7 @@ miniStatement:
     jmp ExitOption
 
 ExitOption:
-    call Clrscr
+    call Clrscr 
     mov eax, 11
     call SetTextColor
     mov edx, OFFSET thankYouMsg
